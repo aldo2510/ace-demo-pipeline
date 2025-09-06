@@ -14,10 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     # Set the cp.icr.io ace container as runtime.
     container: 
-      image: cp.icr.io/cp/appc/ace:13.0.4.0-r1
-      credentials:
-        username: ${{ secrets.CP_USERNAME }}
-        password: ${{ secrets.CP_PASSWORD }}
+    #  image: cp.icr.io/cp/appc/ace:13.0.4.0-r1
+      image: ibmcom/ace:latest
+    #  credentials:
+    #    username: ${{ secrets.CP_USERNAME }}
+    #    password: ${{ secrets.CP_PASSWORD }}
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
