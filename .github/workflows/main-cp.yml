@@ -25,7 +25,7 @@ jobs:
     #    password: ${{ secrets.CP_PASSWORD }}
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Build the application and test it
         shell: bash
