@@ -1,57 +1,96 @@
 # CI build to validate PR changes before merging
-
 name: CI
 
-# Controls when the action will run. 
 on:
-  # Triggers the workflow on push or pull request events but only for the main branch
-  # Disable temporarily during workflow development
-  #push:
-  #  branches: [ main, minikube-cp4i ]
-  #pull_request:
-  #  branches: [ main, minikube-cp4i ]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    container: 
+    container:
       image: tdolby/experimental:ace-minimal-13.0.4.0-alpine
       env:
         LICENSE: accept
+
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
-          
+
       - name: Build the application and test it
         shell: bash
         run: |
           echo "Loading ACE profile"
           export LICENSE=accept
-          set +e # Don't fail on error if the profile has already been loaded
+          set +e
           . /opt/ibm/ace-13/server/bin/mqsiprofile
-          set -e # Fail on error - this must be done after the profile in case the container has the profile loaded already
+          set -e
 
           echo ========================================================================
           echo Building application
           echo ========================================================================
-          # Using --compile-maps-and-schemas for 13.0.1 and later . . . 
-          ibmint package --input-path . --output-bar-file $PWD/tea-application-combined.bar --project TeaSharedLibraryJava --project TeaSharedLibrary --project TeaRESTApplication --project TeaCallableApplicationV2 --compile-maps-and-schemas 
+          ibmint package --input-path . --output-bar-file $PWD/tea-application-combined.bar \
+            --project TeaSharedLibraryJava \
+            --project TeaSharedLibrary \
+            --project TeaRESTApplication \
+            --project TeaCallableApplicationV2 \
+            --compile-maps-and-schemas
 
           echo ========================================================================
           echo Building unit tests
           echo ========================================================================
-          # Create the unit test work directory
           mqsicreateworkdir /tmp/test-work-dir
-          mqsibar -w /tmp/test-work-dir -a $PWD/tea-application-combined.bar 
-          # Build just the unit tests
-          ibmint deploy --input-path . --output-work-directory /tmp/test-work-dir --project TeaRESTApplication_UnitTest
+          mqsibar -w /tmp/test-work-dir -a $PWD/tea-application-combined.bar
+          ibmint deploy --input-path . --output-work-directory /tmp/test-work-dir \
+            --project TeaRESTApplication_UnitTest
 
           echo ========================================================================
           echo Running unit tests
           echo ========================================================================
-          IntegrationServer -w /tmp/test-work-dir --no-nodejs --start-msgflows false --test-project TeaRESTApplication_UnitTest --test-junit-options --reports-dir=junit-reports
+          IntegrationServer -w /tmp/test-work-dir --no-nodejs --start-msgflows false \
+            --test-project TeaRESTApplication_UnitTest \
+            --test-junit-options --reports-dir=junit-reports
+
+      - name: Upload BAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tea-application-bar
+          path: tea-application-combined.bar
+
+      - name: Upload JUnit reports (optional)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-reports
+          path: junit-reports
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Download BAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tea-application-bar
+          path: .
+
+      # ---------- JFrog (OIDC) ----------
+      - name: Setup JFrog CLI (OIDC)
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: ${{ vars.JF_URL }}     # ej: https://tuorg.jfrog.io
+        with:
+          oidc-provider-name: setup-jfrog-cli
+          # Si configuraste audience en JFrog, descomenta:
+          # oidc-audience: tu-audience
+
+      - name: Verificar login a Artifactory
+        run: jf rt ping
+
+      - name: Upload BAR to Artifactory
+        run: |
+          BAR_PATH="tea-application-combined.bar"
+          TARGET_REPO="ibk-generic-dev"
+          TARGET_PATH="${{ github.repository }}/$GITHUB_RUN_NUMBER/tea-application-combined.bar"
+
+          echo "Subiendo $BAR_PATH a $TARGET_REPO/$TARGET_PATH"
+          jf rt u "$BAR_PATH" "$TARGET_REPO/$TARGET_PATH" --flat=true
