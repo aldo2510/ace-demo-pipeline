@@ -65,6 +65,15 @@ jobs:
         with:
           name: junit-reports
           path: junit-reports
+          
+      - name: Publish Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: JUnit Tests
+          path: junit-reports/*.xml
+          reporter: java-junit
+
 
   publish:
     runs-on: ubuntu-latest
