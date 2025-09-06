@@ -12,19 +12,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    # Set the cp.icr.io ace container as runtime.
     container: 
-    #  image: cp.icr.io/cp/appc/ace:13.0.4.0-r1
       image: ibmcom/ace:latest
-    #  credentials:
-    #    username: ${{ secrets.CP_USERNAME }}
-    #    password: ${{ secrets.CP_PASSWORD }}
+      options: --user 0   # 👈 fuerza a correr como root
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v5
       
       - name: Build the application and test it
@@ -32,26 +25,28 @@ jobs:
         run: |
           echo "Loading ACE profile"
           export LICENSE=accept
-          set +e # Don't fail on error if the profile has already been loaded
+          set +e 
           . /opt/ibm/ace-13/server/bin/mqsiprofile
-          set -e # Fail on error - this must be done after the profile in case the container has the profile loaded already
+          set -e 
 
           echo ========================================================================
           echo Building application
           echo ========================================================================
-          # Using --compile-maps-and-schemas for 13.0.1 and later . . . 
-          ibmint package --input-path . --output-bar-file $PWD/tea-application-combined.bar --project TeaSharedLibraryJava --project TeaSharedLibrary --project TeaRESTApplication --project TeaCallableApplicationV2 --compile-maps-and-schemas 
+          ibmint package --input-path . --output-bar-file $PWD/tea-application-combined.bar \
+            --project TeaSharedLibraryJava --project TeaSharedLibrary \
+            --project TeaRESTApplication --project TeaCallableApplicationV2 \
+            --compile-maps-and-schemas 
 
           echo ========================================================================
           echo Building unit tests
           echo ========================================================================
-          # Create the unit test work directory
           mqsicreateworkdir /tmp/test-work-dir
           mqsibar -w /tmp/test-work-dir -a $PWD/tea-application-combined.bar 
-          # Build just the unit tests
-          ibmint deploy --input-path . --output-work-directory /tmp/test-work-dir --project TeaRESTApplication_UnitTest
+          ibmint deploy --input-path . --output-work-directory /tmp/test-work-dir \
+            --project TeaRESTApplication_UnitTest
 
           echo ========================================================================
           echo Running unit tests
           echo ========================================================================
-          IntegrationServer -w /tmp/test-work-dir --no-nodejs --start-msgflows false --test-project TeaRESTApplication_UnitTest
+          IntegrationServer -w /tmp/test-work-dir --no-nodejs --start-msgflows false \
+            --test-project TeaRESTApplication_UnitTest
