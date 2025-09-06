@@ -1,6 +1,10 @@
 # CI build to validate PR changes before merging
 name: CI
 
+permissions:
+  id-token: write
+  contents: read
+  
 on:
   workflow_dispatch:
 
